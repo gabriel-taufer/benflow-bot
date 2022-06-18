@@ -100,7 +100,7 @@ def generate_tweet_with_dall_e_image_DAG(
         dall_e_text_task_id: str,
         default_args = {}
 ):
-    print(f"{parent_dag_name}.{task_id}")
+    print(f"thing: {parent_dag_name}.{task_id}")
     subdag = DAG(
         dag_id=f"{parent_dag_name}.{task_id}",
         default_args=default_args
@@ -125,3 +125,4 @@ def generate_tweet_with_dall_e_image_DAG(
         )
 
         generate_dall_e_image_task >> tweet_dall_e_image_task
+        return subdag
