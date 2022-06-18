@@ -64,10 +64,13 @@ def post_tweet(tweet_text: str, base_64_image: str):
     return twitter_client.create_tweet(text=tweet_text, media_ids=[media.media_id_string])
 
 
-def generate_dall_e_image(task_instance: PythonOperator, dall_e_text_task_id: str) -> str:
+def generate_dall_e_image(task_instance: PythonOperator, dall_e_text_task_id: str, dag_id: str) -> str:
     logging.getLogger().setLevel(logging.DEBUG)
 
-    xcom_result = task_instance.xcom_pull(task_ids=[dall_e_text_task_id])
+    xcom_result = task_instance.xcom_pull(
+        task_ids=[dall_e_text_task_id],
+        dag_id=dag_id
+    )
     dall_e_text = xcom_result[0]
 
     session = retry_session(50)
@@ -80,16 +83,17 @@ def generate_dall_e_image(task_instance: PythonOperator, dall_e_text_task_id: st
     return b64_image
 
 
-def tweet_dall_e_image(task_instance: PythonOperator, dall_e_text_task_id: str):
-    xcom_result = task_instance.xcom_pull(
-        task_ids=[
-            'generate_dall_e_image_task',
-            dall_e_text_task_id
-        ]
+def tweet_dall_e_image(task_instance: PythonOperator, dall_e_text_task_id: str, dag_id: str):
+    subdag_xcom_result = task_instance.xcom_pull(
+        task_ids=['generate_dall_e_image_task']
+    )
+    parent_xcom_result = task_instance.xcom_pull(
+        task_ids=[dall_e_text_task_id],
+        dag_id=dag_id
     )
 
-    dall_e_image = xcom_result[0]
-    dall_e_text = xcom_result[1]
+    dall_e_image = subdag_xcom_result[0]
+    dall_e_text = parent_xcom_result[0]
 
     post_tweet(dall_e_text, dall_e_image)
 
@@ -100,29 +104,30 @@ def generate_tweet_with_dall_e_image_DAG(
         dall_e_text_task_id: str,
         default_args = {}
 ):
-    print(f"thing: {parent_dag_name}.{task_id}")
     subdag = DAG(
         dag_id=f"{parent_dag_name}.{task_id}",
         default_args=default_args
     )
-    with subdag:
-        generate_dall_e_image_task = PythonOperator(
-            task_id="generate_dall_e_image_task",
-            python_callable=generate_dall_e_image,
-            op_kwargs={
-                'dall_e_text_task_id': dall_e_text_task_id
-            },
-            dag=subdag
-        )
 
-        tweet_dall_e_image_task = PythonOperator(
-            task_id='tweet_dall_e_image_task',
-            python_callable=tweet_dall_e_image,
-            op_kwargs={
-                'dall_e_text_task_id': dall_e_text_task_id
-            },
-            dag=subdag
-        )
+    generate_dall_e_image_task = PythonOperator(
+        task_id="generate_dall_e_image_task",
+        python_callable=generate_dall_e_image,
+        op_kwargs={
+            'dall_e_text_task_id': dall_e_text_task_id,
+            'dag_id': parent_dag_name
+        },
+        dag=subdag
+    )
 
-        generate_dall_e_image_task >> tweet_dall_e_image_task
-        return subdag
+    tweet_dall_e_image_task = PythonOperator(
+        task_id='tweet_dall_e_image_task',
+        python_callable=tweet_dall_e_image,
+        op_kwargs={
+            'dall_e_text_task_id': dall_e_text_task_id,
+            'dag_id': parent_dag_name
+        },
+        dag=subdag
+    )
+
+    generate_dall_e_image_task >> tweet_dall_e_image_task
+    return subdag

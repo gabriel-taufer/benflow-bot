@@ -67,8 +67,7 @@ with DAG("twitter_celebrity_meeting_dag", catchup=False, default_args=default_ar
             parent_dag_name="twitter_celebrity_meeting_dag",
             task_id="generate_image_and_tweet",
             default_args=default_args
-        ),
-        default_args=default_args,
+        )
     )
 
     generate_celebrities >> generate_celebrities_meeting_text >> generate_image_and_tweet
