@@ -1,5 +1,6 @@
 import base64
 import io
+import random
 import logging
 from datetime import datetime, timedelta
 from typing import Optional
@@ -78,7 +79,7 @@ def generate_dall_e_image(task_instance: PythonOperator, dall_e_text_task_id: st
         "prompt": dall_e_text,
     })
 
-    b64_image = dall_e_response.json()['images'][0]
+    b64_image = random.choice(dall_e_response.json()['images'])
 
     return b64_image
 
